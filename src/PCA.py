@@ -3,9 +3,6 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-def grahm_matrix(X):
-    return jnp.dot(X, X.T)
-
 class PCA:
     def __init__(self, n_components):
         self.n_components = n_components
@@ -34,99 +31,64 @@ class PCA:
     def reconstruct(self, Z):
         return jnp.dot(Z, self.V_r)
 
-
-def kernel_PCA(X, n_components, kernel):
-    m = X.shape[0]
-    K = kernel(X, X)
-    K = K - jnp.mean(K, axis=0)
-    K = K - jnp.mean(K, axis=1)
-    U, S, V = jnp.linalg.svd(K)
-    V_r = V[:, :n_components]
-    Z = jnp.dot(K, V_r)
-    return Z, V_r
-    
-
-def test_PCA():
-    X = np.random.randn(10, 2)
-    X[:, 1] = 2 * X[:, 0] + 1 + 1* np.random.randn(10)
-    
-    print(X)
-    
-    Z, V_r = PCA(X, 1)
-    print(Z)
-    # Create a 1x2 subplot
-    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-
-    # Plot X on the first subplot
-    ax[0].scatter(X[:, 0], X[:, 1])
-    for i, txt in enumerate(range(len(X))):
-        ax[0].annotate(txt, (X[i, 0], X[i, 1]), textcoords="offset points", xytext=(0, 10), ha='center')
-    ax[0].set_title('Scatter plot of X')
-    ax[0].set_xlabel('X[:, 0]')
-    ax[0].set_ylabel('X[:, 1]')
-
-    # Plot Z on the second subplot
-    # Z is 10x1, so we can just plot it against the index
-    ax[1].scatter(Z[:, 0], np.zeros_like(Z))
-    for i, txt in enumerate(range(len(Z))):
-        ax[1].annotate(txt, (Z[i, 0], 0), textcoords="offset points", xytext=(0, 10), ha='center')
-    ax[1].set_title('Scatter plot of Z')
-    ax[1].set_xlabel('Index')
-    ax[1].set_ylabel('Z')
-
-    # plot the eigenvector
-    ax[0].plot([0, V_r[0, 0]], [0, V_r[1, 0]], 'r-', lw=2)
-
-    # Display the plot
-    plt.tight_layout()
-    plt.show()
-
-
-def test_kernel_PCA():
+# seems to be working
+class KPCA:
+    def __init__(self, n_components, kernel):
+        '''
+        kernel: callable - the dot product in the feature space
+        '''
+        self.n_components = n_components
+        self.kernel = kernel
+        self.eigenvectors = None
+        self.eigenvalues = None
+        self.m = None
         
-    from mpl_toolkits.mplot3d import Axes3D
+        
+    def transform(self, X):
+        # print(type(X))
+        self.m = X.shape[0]
+        vectorized_kernel = jax.vmap(lambda x: jax.vmap(lambda y: self.kernel(x, y))(X))
+
+        K = vectorized_kernel(X)
+        one_m = jnp.ones((self.m, self.m)) / self.m
+        K = K - jnp.dot(one_m, K) - jnp.dot(K, one_m) + jnp.dot(one_m, jnp.dot(K, one_m))
+        
+        # print(K)
+        
+        self.eigenvalues, self.eigenvectors = jnp.linalg.eigh(K)
+        # print(self.eigenvalues.shape, self.eigenvectors.shape)
+        # print(self.eigenvalues)
+        # print(self.eigenvectors)
+        
+        idx = jnp.argsort(self.eigenvalues)[::-1]
+        
+        
+        self.eigenvectors = self.eigenvectors[:, idx]
+        self.eigenvalues = self.eigenvalues[idx]
+        
+        self.V_r = self.eigenvectors[:, :self.n_components]
+        return jnp.dot(K, self.V_r)
+    
+    
+def test_KPCA():
+    def gaussian_kernel(x, y, sigma=1):
+        return jnp.exp(-jnp.linalg.norm(x - y) ** 2 / (2 * sigma ** 2))
+    
     from sklearn.datasets import make_circles
-    # from sklearn.decomposition import KernelPCA
-
-    X, _ = make_circles(n_samples=100, factor=0.3, noise=0.01)
+    X, y = make_circles(n_samples=100, noise=0.1, factor=0.2)
     
-    def rbf_kernel(X, Y, gamma=15):
-        X = jnp.array(X)
-        Y = jnp.array(Y)
-        return jnp.exp(-gamma * jnp.linalg.norm(X[:, None] - Y[None], axis=-1))
+    kpca = KPCA(n_components=3, kernel=gaussian_kernel)    
+    transformed = kpca.transform(X)
     
-    # Z, V_r = kernel_PCA(X, 3, rbf_kernel)
-    Z, V_r = PCA(X, 3)
-    
-    fig = plt.figure(figsize=(12, 6))
-
-    # Plot X on the first subplot
-    ax1 = fig.add_subplot(1, 2, 1)
-    ax1.scatter(X[:, 0], X[:, 1])
-    for i, txt in enumerate(range(len(X))):
-        ax1.annotate(txt, (X[i, 0], X[i, 1]), textcoords="offset points", xytext=(0, 10), ha='center')
-    ax1.set_title('Scatter plot of X')
-    ax1.set_xlabel('X[:, 0]')
-    ax1.set_ylabel('X[:, 1]')
-
-    # Plot Z on the second subplot as a 3D plot
-    ax2 = fig.add_subplot(1, 2, 2, projection='3d')
-    ax2.scatter(Z[:, 0], Z[:, 1], Z[:, 2])
-    for i, txt in enumerate(range(len(Z))):
-        ax2.text(Z[i, 0], Z[i, 1], Z[i, 2], txt, size=10, zorder=1, color='k')
-    ax2.set_title('3D scatter plot of Z')
-    ax2.set_xlabel('Z[:, 0]')
-    ax2.set_ylabel('Z[:, 1]')
-    ax2.set_zlabel('Z[:, 2]')
-
-    # Display the plot
-    plt.tight_layout()
+    fig = plt.figure(figsize=(8, 6))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(transformed[:, 0], transformed[:, 1], transformed[:, 2], c=y, cmap='viridis')
+    ax.set_title('3D Scatter plot of KPCA transformed data')
     plt.show()
-    
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt    
-
-    # test_PCA()
+    test_KPCA()
 
     # test_kernel_PCA()
