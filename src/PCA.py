@@ -30,6 +30,9 @@ class PCA:
     
     def get_eigenvalues(self):
         return self.S ** 2 / (self.m - 1)
+    
+    def reconstruct(self, Z):
+        return jnp.dot(Z, self.V_r)
 
 
 def kernel_PCA(X, n_components, kernel):
