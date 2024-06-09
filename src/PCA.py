@@ -42,32 +42,27 @@ class KPCA:
         self.eigenvectors = None
         self.eigenvalues = None
         self.m = None
+        self.K = None
         
-        
-    def transform(self, X):
-        # print(type(X))
+    def fit(self, X):
         self.m = X.shape[0]
         vectorized_kernel = jax.vmap(lambda x: jax.vmap(lambda y: self.kernel(x, y))(X))
 
         K = vectorized_kernel(X)
         one_m = jnp.ones((self.m, self.m)) / self.m
         K = K - jnp.dot(one_m, K) - jnp.dot(K, one_m) + jnp.dot(one_m, jnp.dot(K, one_m))
-        
-        # print(K)
-        
+        self.K = K
         self.eigenvalues, self.eigenvectors = jnp.linalg.eigh(K)
-        # print(self.eigenvalues.shape, self.eigenvectors.shape)
-        # print(self.eigenvalues)
-        # print(self.eigenvectors)
         
         idx = jnp.argsort(self.eigenvalues)[::-1]
-        
         
         self.eigenvectors = self.eigenvectors[:, idx]
         self.eigenvalues = self.eigenvalues[idx]
         
         self.V_r = self.eigenvectors[:, :self.n_components]
-        return jnp.dot(K, self.V_r)
+        
+    def transform(self, idx):
+        return jnp.dot(self.K[idx], self.V_r)
     
     
 def test_KPCA():
@@ -78,7 +73,10 @@ def test_KPCA():
     X, y = make_circles(n_samples=100, noise=0.1, factor=0.2)
     
     kpca = KPCA(n_components=3, kernel=gaussian_kernel)    
-    transformed = kpca.transform(X)
+    # transformed = kpca.transform(X)
+    kpca.fit(X)
+    transformed = kpca.transform(jnp.arange(100))
+    print(transformed.shape)
     
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(111, projection='3d')
