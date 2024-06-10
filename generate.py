@@ -16,20 +16,20 @@ from jax import nn
 import tensorflow as tf
 
 def main():
-    decoder = tf.keras.models.load_model('models/decoder.keras')
+    decoder = tf.keras.models.load_model('models/mnist/decoder.keras')
 
     latent_size = 32
 
     for i in range(10):
         latent = np.random.randn(1, latent_size)
         image = decoder.predict(latent)
-        image = image.reshape(256, 256, 3)
+        image = image.reshape(28, 28)
         image = image * 255.0
         image = image.astype(np.uint8)
         image = Image.fromarray(image)
-        if not os.path.exists('generated_images'):
-            os.makedirs('generated_images')
-        image.save(f'generated_images/{i+1}.png')
+        if not os.path.exists('generated_images/mnist'):
+            os.makedirs('generated_images/mnist')
+        image.save(f'generated_images/mnist/{i+1}.png')
 
 if __name__ == '__main__':
     main()
