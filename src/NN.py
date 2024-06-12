@@ -34,11 +34,14 @@ class LReLU(Layer):
         return jax.nn.leaky_relu(x)
     
     
-#TODO
 class LayerConv2D(Layer):
     def forward(params, x):
-        # return jax.nn.conv(x, params, (1, 1), 'SAME')
-        pass 
+        # print(f"kernel shape: {params.shape}")
+        out = jax.lax.conv(jnp.transpose(x,[0,3,1,2]),    # lhs = NCHW image tensor
+                jnp.transpose(params,[3,2,0,1]), # rhs = OIHW conv kernel tensor
+                (1, 1),  # window strides
+                'SAME') # padding mode
+        return out
     
     def init_params(rng, shape):
         return random.normal(rng, shape)

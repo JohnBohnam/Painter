@@ -64,6 +64,9 @@ class NeuralNet:
             print(f'Epoch: {_}, Loss: {loss}')
     
 
+    
+def MSE(y_hat, y):
+    return jnp.mean((y_hat - y)**2)
         
 def log_entropy(y_hat, y):
     return -jnp.mean(y_hat * y)
@@ -97,9 +100,6 @@ def main():
         (),
     ]
     
-    
-    def MSE(y_hat, y):
-        return jnp.mean((y_hat - y)**2)
 
     
     model = NeuralNet(layers, layer_shapes, MSE)
@@ -158,7 +158,8 @@ def conv_test():
     size = 5
     
     rng = random.PRNGKey(0)
-    X = random.normal(rng, (1000, size))
+    X = random.normal(rng, (1000, size, size))
+    X = X.reshape((1000, size, size, 1))
     
     def fun(x):
         return jnp.sum(x)
@@ -174,12 +175,25 @@ def conv_test():
         NN.LReLU,
     ]
     
-    # layer_shapes = [
+    layer_shapes = [
+        (5, 5, 1, 1),
+        (),
+        (),
+        (25, 1),
+        (1,),
+        (),
+    ]
+    
+    model = NeuralNet(layers, layer_shapes, MSE)
+    
+    model.train(X, y, epochs=1000, learning_rate=0.05)
+    # model.forward(model.params, X)
         
 
 if __name__ == "__main__":
-    main()
+    # main()
     # simple()
+    conv_test()
     
     
     
