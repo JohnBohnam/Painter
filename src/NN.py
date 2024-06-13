@@ -24,6 +24,7 @@ class LayerMatMul(Layer):
     
 class LayerBias(Layer):
     def forward(params, x):
+        print('LayerBias:', x.shape, params.shape)
         return x + params
     
     def init_params(rng, shape):
@@ -65,3 +66,17 @@ class LayerConv2DTranspose(Layer):
 class LayerFlatten(Layer):
     def forward(params, x):
         return jnp.reshape(x, (x.shape[0], -1))
+
+class Layer2DReshape(Layer):
+    def forward(params, x):
+        # make x from vector to square matrix
+        size = x.shape[1] // 16 # TODO: fix later
+        return jnp.reshape(x, (x.shape[0], 16, int(np.sqrt(size)), int(np.sqrt(size))))
+    
+    # for some reason gradient is not working if to initialize using init_params and pass the size as param
+    
+class Layer2DReshape1(Layer):
+    def forward(params, x):
+        # make x from vector to square matrix
+        size = x.shape[1] // 1 # TODO: fix later
+        return jnp.reshape(x, (x.shape[0], 1, int(np.sqrt(size)), int(np.sqrt(size))))

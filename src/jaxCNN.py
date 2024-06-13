@@ -24,7 +24,6 @@ class NeuralNet:
             
         def forward(params, x):
             for i in range(len(self.layers)):
-                print('Layer:', i, 'Shape:', params[i].shape, 'Input:', x.shape)
                 x = self.layers[i].forward(params[i], x)
             return x
         
@@ -38,9 +37,28 @@ class NeuralNet:
         
         print(f"NN initialized with {len(self.params)} layers")
         
-    
     def __call__(self, x):
         return self.forward(self.params, x)
+
+    def updateWithGrad(self, grads, learning_rate):
+        for i in range(len(self.params)):
+            if grads[i].shape == (0,):
+                continue
+            
+            g_max = jnp.max(jnp.abs(grads[i]))
+            if g_max > 1:
+                grads[i] = grads[i] / g_max
+            self.params[i] = self.params[i] - learning_rate * grads[i]
+
+    def update(self, x, y, learning_rate):
+        grads = grad(self.loss)(self.params, x, y)
+        self.updateWithGrad(grads, learning_rate)
+        
+    def train(self, X, y, epochs=100, learning_rate=0.01):
+        for _ in range(epochs):
+            self.update(X, y, learning_rate)
+            loss = self.loss(self.params, X, y)
+            print(f'Epoch: {_}, Loss: {loss}')
 
     def updateWithGrad(self, grads, learning_rate):
         for i in range(len(self.params)):
@@ -160,35 +178,41 @@ class AutoEncoder:
     def __init__(self, encoder_layers, encoder_layer_shapes, decoder_layers, decoder_layer_shapes, loss_f):
         self.encoder = NeuralNet(encoder_layers, encoder_layer_shapes, loss_f)
         self.decoder = NeuralNet(decoder_layers, decoder_layer_shapes, loss_f)
-        
-        def forward(x):
-            return self.decoder(self.encoder(x))
-        
-        self.forward = forward
-        
-        def loss(params, x, y):
-            self.encoder.params = params[:len(self.encoder.params)]
-            self.decoder.params = params[len(self.encoder.params):]
+        self.loss_f = loss_f
 
-            y_hat = forward(x)
-            return loss_f(y_hat, y)
-        
-        self.loss = loss
-        
+    def forward(self, x):
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        return decoded
+
+    def loss(self, params, x, y):
+        enc_params_len = len(self.encoder.params)
+        self.encoder.params = params[:enc_params_len]
+        self.decoder.params = params[enc_params_len:]
+
+        y_hat = self.forward(x)
+        return self.loss_f(y_hat, y)
+
     def __call__(self, x):
         return self.forward(x)
-    
-    def update(self, x, y, learning_rate):
-        grads = grad(self.loss)(self.encoder.params + self.decoder.params, x, y)
-        self.encoder.updateWithGrad(grads[:len(self.encoder.params)], learning_rate)
-        self.decoder.updateWithGrad(grads[len(self.encoder.params):], learning_rate)
 
+    def update(self, x, y, learning_rate):
+        combined_params = self.encoder.params + self.decoder.params
+        grads = grad(self.loss)(combined_params, x, y)
+
+        enc_params_len = len(self.encoder.params)
+        enc_grads = grads[:enc_params_len]
+        dec_grads = grads[enc_params_len:]
+
+        self.encoder.updateWithGrad(enc_grads, learning_rate)
+        self.decoder.updateWithGrad(dec_grads, learning_rate)
 
     def train(self, X, y, epochs=100, learning_rate=0.01):
-        for _ in range(epochs):
+        for epoch in range(epochs):
             self.update(X, y, learning_rate)
-            loss = self.loss(X, self(y))
-            print(f'Epoch: {_}, Loss: {loss}')
+            cur_loss = self.loss(self.encoder.params + self.decoder.params, X, y)
+            print(f'Epoch: {epoch}, Loss: {cur_loss}')
+
 
 
 
@@ -239,6 +263,7 @@ def autoencoder_test():
     num_pixels = 28 * 28
 
     train_images = jnp.reshape(train_images, (len(train_images), num_pixels))
+    print(train_images.shape)
 
     num_labels = 10
 
@@ -250,36 +275,46 @@ def autoencoder_test():
         NN.LayerConv2D,
         NN.LReLU,
         NN.LayerFlatten,
+        NN.LayerMatMul,
         NN.LayerBias,
     ]
     
     encoder_layer_shapes = [
-        (28, 28, 1, 16),
+        (14, 14, 1, 8),
         (),
-        (28, 28, 16, 32),
+        (3, 3, 8, 16),
         (),
         (),
-        (32,),
+        (28 * 28 * 16, 16),
+        (16,),
     ]
 
     decoder_layers = [
-        NN.LayerConv2DTranspose,
-        NN.LReLU,
-        NN.LayerConv2DTranspose,
-        NN.LReLU,
-        NN.LayerConv2DTranspose,
+        NN.LayerMatMul,
+        NN.Layer2DReshape,
+        # NN.LayerConv2DTranspose,
+        # NN.LReLU,
+        # NN.LayerConv2DTranspose,
+        # NN.LReLU,
+        # NN.LayerConv2DTranspose,
         NN.LayerFlatten,
+        NN.LayerMatMul,
         NN.LayerBias,
+        NN.Layer2DReshape1,
     ]
 
     decoder_layer_shapes = [
-        (28, 28, 32, 16),
+        (16, 28 * 28 * 16),
+        (16),
+        # (14, 14, 16, 8),
+        # (),
+        # (3, 3, 8, 4),
+        # (),
+        # (3, 3, 4, 1),
         (),
-        (28, 28, 16, 1),
-        (),
-        (28, 28, 1, 1),
-        (),
-        (1,),
+        (16 * 28 * 28, 28 * 28),
+        (28 * 28, ),
+        (1),
     ]
 
 
@@ -304,6 +339,7 @@ def autoencoder_test():
         
 
 if __name__ == "__main__":
+    # jax.config.update("jax_traceback_filtering", "off")
     # main()
     # simple()
     # conv_test()
