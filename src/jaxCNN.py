@@ -24,6 +24,7 @@ class NeuralNet:
             
         def forward(params, x):
             for i in range(len(self.layers)):
+                # print(f'Layer {i} - {self.layers[i]}: {params[i].shape}, {x.shape}')
                 x = self.layers[i].forward(params[i], x)
             return x
         
@@ -60,29 +61,6 @@ class NeuralNet:
             loss = self.loss(self.params, X, y)
             print(f'Epoch: {_}, Loss: {loss}')
 
-    def updateWithGrad(self, grads, learning_rate):
-        for i in range(len(self.params)):
-            if grads[i].shape == (0,):
-                continue
-            
-            g_max = jnp.max(jnp.abs(grads[i]))
-            if g_max > 1:
-                grads[i] = grads[i] / g_max
-            # print(f'Layer {i} has shape {self.params[i].shape}')
-            # print(f'Layer {i} has grad shape {grads[i].shape}')
-            # print(f'grad for layer {i} :\n{grads[i]}')
-            self.params[i] = self.params[i] - learning_rate * grads[i]
-
-    def update(self, x, y, learning_rate):
-        grads = grad(self.loss)(self.params, x, y)
-        self.updateWithGrad(grads, learning_rate)
-        
-    def train(self, X, y, epochs=100, learning_rate=0.01):
-        for _ in range(epochs):
-            self.update(X, y, learning_rate)
-            loss = self.loss(self.params, X, y)
-            print(f'Epoch: {_}, Loss: {loss}')
-    
 
     
 def MSE(y_hat, y):
@@ -179,38 +157,46 @@ class AutoEncoder:
         self.encoder = NeuralNet(encoder_layers, encoder_layer_shapes, loss_f)
         self.decoder = NeuralNet(decoder_layers, decoder_layer_shapes, loss_f)
         self.loss_f = loss_f
+        self.params = (self.encoder.params, self.decoder.params)
 
-    def forward(self, x):
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
-        return decoded
+        def forward(params, x):
+            encoder_params, decoder_params = params
+            encoded = self.encoder.forward(encoder_params, x)
+            decoded = self.decoder.forward(decoder_params, encoded)
+            return decoded
+        
+        self.forward = forward
 
-    def loss(self, params, x, y):
-        enc_params_len = len(self.encoder.params)
-        self.encoder.params = params[:enc_params_len]
-        self.decoder.params = params[enc_params_len:]
+        def loss(params, x, y):
+            # enc_params_len = len(self.encoder.params)
+            # self.encoder.params = params[:enc_params_len]
+            # self.decoder.params = params[enc_params_len:]
 
-        y_hat = self.forward(x)
-        return self.loss_f(y_hat, y)
+            y_hat = self.forward(params, x)
+            return self.loss_f(y_hat, y)
+        
+        self.loss = loss
 
     def __call__(self, x):
-        return self.forward(x)
+        return self.forward(self.params, x)
 
     def update(self, x, y, learning_rate):
-        combined_params = self.encoder.params + self.decoder.params
-        grads = grad(self.loss)(combined_params, x, y)
+        # combined_params = (self.encoder.params + self.decoder.params)
+        grads = grad(self.loss)(self.params, x, y)
 
-        enc_params_len = len(self.encoder.params)
-        enc_grads = grads[:enc_params_len]
-        dec_grads = grads[enc_params_len:]
+        # enc_params_len = len(self.encoder.params)
+        # enc_grads = grads[:enc_params_len]
+        # dec_grads = grads[enc_params_len:]
+        enc_grads, dec_grads = grads
 
         self.encoder.updateWithGrad(enc_grads, learning_rate)
         self.decoder.updateWithGrad(dec_grads, learning_rate)
+        self.params = (self.encoder.params, self.decoder.params)
 
     def train(self, X, y, epochs=100, learning_rate=0.01):
         for epoch in range(epochs):
             self.update(X, y, learning_rate)
-            cur_loss = self.loss(self.encoder.params + self.decoder.params, X, y)
+            cur_loss = self.loss(self.params, X, y)
             print(f'Epoch: {epoch}, Loss: {cur_loss}')
 
 
@@ -264,6 +250,9 @@ def autoencoder_test():
     num_pixels = 28 * 28
 
     train_images = jnp.reshape(train_images, (len(train_images), num_pixels))
+    n_train = 1000
+    train_images = train_images[:n_train]
+    train_labels = train_labels[:n_train]
     print(train_images.shape)
 
     num_labels = 10
