@@ -13,8 +13,6 @@ def _predict(params, x):
     w, b = params[-1]
     x = jnp.dot(x, w) + b
     return x - logsumexp(x)
-    # x = jax.nn.softmax(x)
-    # return x
 
 def _batched_predict(params, X):
     return jax.vmap(lambda x: _predict(params, x))(X)

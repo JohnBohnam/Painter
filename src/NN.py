@@ -5,8 +5,10 @@ from jax import grad, jit, random
 
 import datatransform
 from jax.scipy.special import logsumexp
+from typing import List, Tuple
 
 class Layer:
+    @jit
     def forward(params, x):
         raise NotImplementedError()
     
@@ -14,6 +16,7 @@ class Layer:
         return jnp.array([])
 
 class LayerMatMul(Layer):
+    @jit
     def forward(params, x):
         return jnp.dot(x, params)
     
@@ -23,6 +26,7 @@ class LayerMatMul(Layer):
         return W
     
 class LayerBias(Layer):
+    @jit
     def forward(params, x):
         print('LayerBias:', x.shape, params.shape)
         return x + params
@@ -31,42 +35,29 @@ class LayerBias(Layer):
         return jnp.zeros(shape)
 
 class LReLU(Layer):
+    @jit
     def forward(params, x):
         return jax.nn.leaky_relu(x)
     
     
 class LayerConv2D(Layer):
+    @jit
     def forward(params, x):
-        # print(f"kernel shape: {params.shape}")
-        print('LayerConv2D:', x.shape, params.shape)
-        print(x.shape, jnp.transpose(params,[3,2,0,1]).shape)
-        out = jax.lax.conv(x,    # lhs = NCHW image tensor
-                jnp.transpose(params,[3,2,0,1]), # rhs = OIHW conv kernel tensor
-                (1, 1),  # window strides
-                'SAME') # padding mode
-        print('LayerConv2D:', out.shape)
-        return out
-    
-    def init_params(rng, shape):
-        return random.normal(rng, shape)
-
-class LayerConv2DTranspose(Layer):
-    def forward(params, x):
-        # print(f"kernel shape: {params.shape}")
-        print(x.shape, jnp.transpose(params,[3,2,0,1]).shape)
-        out = jax.lax.conv_transpose(x,    # lhs = NCHW image tensor
-                jnp.transpose(params,[3,2,0,1]), # rhs = OIHW conv kernel tensor
-                (1, 1),  # window strides
-                'SAME') # padding mode
+        out = jax.lax.conv(x, 
+                           jnp.transpose(params, [3, 2, 0, 1]),
+                           (1, 1),
+                           'SAME')
         return out
 
     def init_params(rng, shape):
-        return random.normal(rng, shape)
+        # return random.normal(rng, shape)
+        return jnp.zeros(shape)
     
 class LayerFlatten(Layer):
+    @jit
     def forward(params, x):
         return jnp.reshape(x, (x.shape[0], -1))
-
+        return jnp.reshape(x, (x.shape[0], -1))
 class Layer2DReshape(Layer):
     def forward(params, x):
         # make x from vector to square matrix

@@ -226,7 +226,7 @@ def conv_test():
     X = X.transpose((0, 3, 1, 2))
     
     def fun(x):
-        return jnp.sum(x)
+        return jnp.sum(jnp.abs(x))
     
     y = jnp.array([[fun(x)] for x in X])
     
@@ -241,6 +241,7 @@ def conv_test():
         NN.LReLU,
     ]
     
+    n_channels = 3
     layer_shapes = [
         (3, 3, 1, 1),
         (),
@@ -252,9 +253,9 @@ def conv_test():
         (),
     ]
     
-    model = NeuralNet(layers, layer_shapes, MSE)
+    model = NN.NeuralNet(layers, layer_shapes, MSE)
     
-    model.train(X, y, epochs=1000, learning_rate=0.05)
+    model.train(X, y, epochs=1000, learning_rate=0.01)
     # model.forward(model.params, X)
 
 def autoencoder_test():
