@@ -41,7 +41,7 @@ def readMNIST(path_prefix='./data/MNIST/', verbose=True):
         with open(filename, 'rb') as f:
             zero, data_type, dims = struct.unpack('>HBB', f.read(4))
             shape = tuple(struct.unpack('>I', f.read(4))[0] for d in range(dims))
-            return np.frombuffer(f.read(), dtype=np.uint8).reshape(shape)
+            return np.frombuffer(f.read(), dtype=np.int8).reshape(shape)
         
     train_images = read_idx(path_prefix+'train-images-idx3-ubyte/train-images-idx3-ubyte')
     test_images = read_idx(path_prefix+'t10k-images-idx3-ubyte/t10k-images-idx3-ubyte')

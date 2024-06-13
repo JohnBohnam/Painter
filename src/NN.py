@@ -28,6 +28,7 @@ class LayerMatMul(Layer):
 class LayerBias(Layer):
     @jit
     def forward(params, x):
+        print('LayerBias:', x.shape, params.shape)
         return x + params
     
     def init_params(rng, shape):
@@ -47,7 +48,7 @@ class LayerConv2D(Layer):
                            (1, 1),
                            'SAME')
         return out
-    
+
     def init_params(rng, shape):
         # return random.normal(rng, shape)
         return jnp.zeros(shape)
@@ -56,66 +57,17 @@ class LayerFlatten(Layer):
     @jit
     def forward(params, x):
         return jnp.reshape(x, (x.shape[0], -1))
-    
-class LayerSigmoid(Layer):
-    @jit
+        return jnp.reshape(x, (x.shape[0], -1))
+class Layer2DReshape(Layer):
     def forward(params, x):
-        return jax.nn.sigmoid(x)
-
-class LayerSoftmax(Layer):
-    @jit
+        # make x from vector to square matrix
+        size = x.shape[1] // 16 # TODO: fix later
+        return jnp.reshape(x, (x.shape[0], 16, int(np.sqrt(size)), int(np.sqrt(size))))
+    
+    # for some reason gradient is not working if to initialize using init_params and pass the size as param
+    
+class Layer2DReshape1(Layer):
     def forward(params, x):
-        return jax.nn.softmax(x)
-
-class NeuralNet:
-    def __init__(self, layers: List[Layer], layer_shapes: List[Tuple[int]], loss_f): 
-        self.layers = layers
-        self.layer_shapes = layer_shapes
-        self.loss_f = loss_f
-        self.params = []
-        self.rng = random.PRNGKey(100)
-        
-        for i in range(len(layer_shapes)):
-            self.params.append(layers[i].init_params(self.rng, layer_shapes[i]))
-            
-        def forward(params, x):
-            for i in range(len(self.layers)):
-                x = self.layers[i].forward(params[i], x)
-            return x
-        
-        self.forward = forward
-        
-        def loss(params, x, y):
-            y_hat = forward(params, x)
-            return self.loss_f(y_hat, y)
-        
-        self.loss = loss
-        
-        print(f"NN initialized with {len(self.params)} layers")
-        
-    
-    def __call__(self, x):
-        return self.forward(self.params, x)
-
-    
-    def update(self, x, y, learning_rate):
-        grads = grad(self.loss)(self.params, x, y)
-        for i in range(len(self.params)):
-            if grads[i].shape == (0,):
-                continue
-            
-            g_max = jnp.max(jnp.abs(grads[i]))
-            if g_max > 1:
-                grads[i] = grads[i] / g_max
-            # print(f'Layer {i} has shape {self.params[i].shape}')
-            # print(f'Layer {i} has grad shape {grads[i].shape}')
-            # print(f'grad for layer {i} :\n{grads[i]}')
-            self.params[i] = self.params[i] - learning_rate * grads[i]
-            
-        
-    def train(self, X, y, epochs=100, learning_rate=0.01):
-        for _ in range(epochs):
-            self.update(X, y, learning_rate)
-            loss = self.loss(self.params, X, y)
-            print(f'Epoch: {_}, Loss: {loss}')
-    
+        # make x from vector to square matrix
+        size = x.shape[1] // 1 # TODO: fix later
+        return jnp.reshape(x, (x.shape[0], 1, int(np.sqrt(size)), int(np.sqrt(size))))

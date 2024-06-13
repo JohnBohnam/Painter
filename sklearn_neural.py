@@ -102,7 +102,7 @@ def load(encoder, decoder, path: str) -> None:
     decoder.load(os.path.join(path, 'decoder.keras'))
 
 def main():
-    images = load_images('data', 1000)
+    images = load_images('data', 100)
     images = preprocess_images(images)
     images = images.reshape(images.shape[0], 256, 256, 3)
     
@@ -136,7 +136,8 @@ def main():
         tf.keras.layers.UpSampling2D((2, 2)),
         tf.keras.layers.Conv2DTranspose(32, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.UpSampling2D((2, 2)),
-        tf.keras.layers.Conv2DTranspose(3, (3, 3), activation='relu', padding='same')
+        tf.keras.layers.Conv2DTranspose(3, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Reshape((256, 256, 3))
     ])
     optimizer = tf.keras.optimizers.Adam()  
 
