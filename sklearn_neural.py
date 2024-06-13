@@ -17,6 +17,7 @@ from jax import random as jrandom
 from jax import lax
 from jax import nn
 import tensorflow as tf
+import datetime
 
 def load_images(path: str, limit=None) -> List[np.ndarray]:
     images = []
@@ -123,10 +124,32 @@ def backward(encoder, decoder, x: np.ndarray, y: np.ndarray, lr: float = 0.01) -
     decoder.optimizer.apply_gradients(zip(gradients, encoder.trainable_variables + decoder.trainable_variables))
     encoder.optimizer.apply_gradients(zip(gradients, encoder.trainable_variables + decoder.trainable_variables))
 
-def train(encoder, decoder, x: np.ndarray, y: np.ndarray, epochs: int = 100, lr: float = 0.01) -> None:
+def train(encoder, decoder, x: np.ndarray, y: np.ndarray, epochs: int = 100, lr: float = 0.01, batch_size: int = 32) -> None:
     for epoch in range(epochs):
         print(f'Epoch {epoch + 1}/{epochs}')
-        backward(encoder, decoder, x, y, lr)
+        idx = np.random.choice(x.shape[0], size=batch_size, replace=False)
+        x_batch = x[idx]
+        y_batch = y[idx]
+        backward(encoder, decoder, x_batch, y_batch, lr)
+
+def train2(encoder, decoder, dataset, epochs: int = 100, lr: float = 0.01) -> None:
+    optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+    mse_loss_fn = tf.keras.losses.MeanSquaredError()
+
+    for epoch in range(epochs):
+        print(f'Epoch {epoch + 1}/{epochs}')
+        for step, (x_batch, y_batch) in enumerate(dataset):
+            with tf.GradientTape() as tape:
+                encoded = encoder(x_batch, training=True)
+                decoded = decoder(encoded, training=True)
+                loss = mse_loss_fn(y_batch, decoded)
+            
+            grads = tape.gradient(loss, encoder.trainable_weights + decoder.trainable_weights)
+            optimizer.apply_gradients(zip(grads, encoder.trainable_weights + decoder.trainable_weights))
+            
+            if step % 100 == 0:
+                print(f'Step {step}: loss = {loss.numpy()}')
+
 
 def save(encoder, decoder, path: str) -> None:
     if not os.path.exists(path):
@@ -139,10 +162,13 @@ def load(encoder, decoder, path: str) -> None:
     decoder.load(os.path.join(path, 'decoder.keras'))
 
 def main():
-    # images = load_images('data', 300)
-    images, _ = load_mnist()
+    images = load_images('data', 100)
     images = preprocess_images(images)
-    images = images.reshape(images.shape[0], 28, 28)
+    images = images.reshape(images.shape[0], 256, 256, 3)
+    
+    dataset = tf.data.Dataset.from_tensor_slices((images, images))
+    dataset = dataset.shuffle(buffer_size=1024).batch(32).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+
 
     # define encoder and decoder using convolutional neural networks
     encoder = tf.keras.Sequential([
@@ -157,18 +183,25 @@ def main():
         tf.keras.layers.InputLayer(input_shape=(32,)),
         tf.keras.layers.Dense(64, activation='relu'),
         tf.keras.layers.Dense(128, activation='relu'),
-        tf.keras.layers.Dense(28 * 28, activation='sigmoid'),
-        tf.keras.layers.Reshape((28, 28))
+        tf.keras.layers.Dense(32*32*3, activation='relu'),
+        tf.keras.layers.Reshape((32, 32, 3)),
+        tf.keras.layers.Conv2DTranspose(32, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.UpSampling2D((2, 2)),
+        tf.keras.layers.Conv2DTranspose(32, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.UpSampling2D((2, 2)),
+        tf.keras.layers.Conv2DTranspose(32, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.UpSampling2D((2, 2)),
+        tf.keras.layers.Conv2DTranspose(3, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Reshape((256, 256, 3))
     ])
-
-    optimizer = tf.keras.optimizers.Adam()
+    optimizer = tf.keras.optimizers.Adam()  
 
     # use optimizer to compile the model
     encoder.compile(optimizer=optimizer)
     decoder.compile(optimizer=optimizer)
 
     # train the model
-    train(encoder, decoder, images, images, 100)
+    train2(encoder, decoder, dataset, epochs=100, lr=0.01)
 
     # test the model
     latent = encoder(images)
@@ -176,9 +209,12 @@ def main():
 
     reconstructed = postprocess_images_mnist(reconstructed.numpy())
 
-    save_images(reconstructed, 'reconstructed/MNIST')
+    current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
-    save(encoder, decoder, 'models/mnist')
+    save_images(reconstructed, f'reconstructed_{current_datetime}')
+
+    save(encoder, decoder, f'models_{current_datetime}')
+
 
 if __name__ == '__main__':
     main()

@@ -1,5 +1,3 @@
-# Generate random person images using the trained autoencoder by passing random vectors in the latent space.
-
 # Path: Painter/generate.py
 
 import numpy as np
