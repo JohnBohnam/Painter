@@ -11,58 +11,6 @@ def one_hot(x, k, dtype=jnp.float32):
     return jnp.array(x[:, None] == jnp.arange(k), dtype)
 
 
-class NeuralNet:
-    def __init__(self, layers, layer_shapes, loss_f): 
-        self.layers = layers
-        self.layer_shapes = layer_shapes
-        self.loss_f = loss_f
-        self.params = []
-        self.rng = random.PRNGKey(100)
-        
-        for i in range(len(layer_shapes)):
-            self.params.append(layers[i].init_params(self.rng, layer_shapes[i]))
-            
-        def forward(params, x):
-            for i in range(len(self.layers)):
-                x = self.layers[i].forward(params[i], x)
-            return x
-        
-        self.forward = forward
-        
-        def loss(params, x, y):
-            y_hat = forward(params, x)
-            return self.loss_f(y_hat, y)
-        
-        self.loss = loss
-        
-        print(f"NN initialized with {len(self.params)} layers")
-        
-    
-    def __call__(self, x):
-        return self.forward(self.params, x)
-
-    
-    def update(self, x, y, learning_rate):
-        grads = grad(self.loss)(self.params, x, y)
-        for i in range(len(self.params)):
-            if grads[i].shape == (0,):
-                continue
-            
-            g_max = jnp.max(jnp.abs(grads[i]))
-            if g_max > 1:
-                grads[i] = grads[i] / g_max
-            # print(f'Layer {i} has shape {self.params[i].shape}')
-            # print(f'Layer {i} has grad shape {grads[i].shape}')
-            # print(f'grad for layer {i} :\n{grads[i]}')
-            self.params[i] = self.params[i] - learning_rate * grads[i]
-            
-        
-    def train(self, X, y, epochs=100, learning_rate=0.01):
-        for _ in range(epochs):
-            self.update(X, y, learning_rate)
-            loss = self.loss(self.params, X, y)
-            print(f'Epoch: {_}, Loss: {loss}')
-    
 
     
 def MSE(y_hat, y):
@@ -155,19 +103,23 @@ def simple():
     
 # not done yet
 def conv_test():
-    size = 5
+    size = 10
     
     rng = random.PRNGKey(0)
     X = random.normal(rng, (1000, size, size))
     X = X.reshape((1000, size, size, 1))
+    X = X.transpose((0, 3, 1, 2))
     
     def fun(x):
-        return jnp.sum(x)
+        return jnp.sum(jnp.abs(x))
     
     y = jnp.array([[fun(x)] for x in X])
     
     layers = [
         NN.LayerConv2D,
+        NN.LayerBias,
+        NN.LayerConv2D,
+        NN.LayerBias,
         NN.LayerFlatten,
         NN.LReLU,
         NN.LayerMatMul,
@@ -175,19 +127,30 @@ def conv_test():
         NN.LReLU,
     ]
     
+    n_channels = 1
     layer_shapes = [
-        (5, 5, 1, 1),
+        # usage: (kernel_size, kernel_size, input_channels, output_channels)
+        (2, 2, 1, n_channels),
+        (n_channels, size, size),
+        (2, 2, n_channels, 1),
+        (1, size, size),
         (),
         (),
-        (25, 1),
+        # the output size is just input_h * input_w * input_channels
+        (size*size*1, 1), 
         (1,),
         (),
     ]
     
-    model = NeuralNet(layers, layer_shapes, MSE)
+    model = NN.NeuralNet(layers, layer_shapes, MSE)
     
-    model.train(X, y, epochs=1000, learning_rate=0.05)
+    model.train(X, y, epochs=1000, learning_rate=0.01)
     # model.forward(model.params, X)
+    
+    n_show = 2
+    idx = random.choice(rng, len(X), (n_show,), replace=False)
+    
+    print(f"input: \n{X[idx]}, \noutput: \n{model(X[idx])}, \nexpected: \n{y[idx]}")
         
 
 if __name__ == "__main__":
