@@ -8,6 +8,7 @@ from jax.scipy.special import logsumexp
 from typing import List, Tuple
 
 class Layer:
+    @jit
     def forward(params, x):
         raise NotImplementedError()
     
@@ -15,6 +16,7 @@ class Layer:
         return jnp.array([])
 
 class LayerMatMul(Layer):
+    @jit
     def forward(params, x):
         return jnp.dot(x, params)
     
@@ -24,6 +26,7 @@ class LayerMatMul(Layer):
         return W
     
 class LayerBias(Layer):
+    @jit
     def forward(params, x):
         return x + params
     
@@ -31,11 +34,13 @@ class LayerBias(Layer):
         return jnp.zeros(shape)
 
 class LReLU(Layer):
+    @jit
     def forward(params, x):
         return jax.nn.leaky_relu(x)
     
     
 class LayerConv2D(Layer):
+    @jit
     def forward(params, x):
         out = jax.lax.conv(x, 
                            jnp.transpose(params, [3, 2, 0, 1]),
@@ -48,11 +53,19 @@ class LayerConv2D(Layer):
         return jnp.zeros(shape)
     
 class LayerFlatten(Layer):
+    @jit
     def forward(params, x):
         return jnp.reshape(x, (x.shape[0], -1))
     
-    
+class LayerSigmoid(Layer):
+    @jit
+    def forward(params, x):
+        return jax.nn.sigmoid(x)
 
+class LayerSoftmax(Layer):
+    @jit
+    def forward(params, x):
+        return jax.nn.softmax(x)
 
 class NeuralNet:
     def __init__(self, layers: List[Layer], layer_shapes: List[Tuple[int]], loss_f): 

@@ -127,17 +127,17 @@ def conv_test():
         NN.LReLU,
     ]
     
-    n_channels = 1
+    n_channels = 3
     layer_shapes = [
         # usage: (kernel_size, kernel_size, input_channels, output_channels)
         (2, 2, 1, n_channels),
         (n_channels, size, size),
-        (2, 2, n_channels, 1),
-        (1, size, size),
+        (2, 2, n_channels, 4),
+        (4, size, size),
         (),
         (),
         # the output size is just input_h * input_w * input_channels
-        (size*size*1, 1), 
+        (size*size*4, 1), 
         (1,),
         (),
     ]
