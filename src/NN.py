@@ -37,12 +37,28 @@ class LReLU(Layer):
 class LayerConv2D(Layer):
     def forward(params, x):
         # print(f"kernel shape: {params.shape}")
-        out = jax.lax.conv(jnp.transpose(x,[0,3,1,2]),    # lhs = NCHW image tensor
+        print('LayerConv2D:', x.shape, params.shape)
+        print(x.shape, jnp.transpose(params,[3,2,0,1]).shape)
+        out = jax.lax.conv(x,    # lhs = NCHW image tensor
+                jnp.transpose(params,[3,2,0,1]), # rhs = OIHW conv kernel tensor
+                (1, 1),  # window strides
+                'SAME') # padding mode
+        print('LayerConv2D:', out.shape)
+        return out
+    
+    def init_params(rng, shape):
+        return random.normal(rng, shape)
+
+class LayerConv2DTranspose(Layer):
+    def forward(params, x):
+        # print(f"kernel shape: {params.shape}")
+        print(x.shape, jnp.transpose(params,[3,2,0,1]).shape)
+        out = jax.lax.conv_transpose(x,    # lhs = NCHW image tensor
                 jnp.transpose(params,[3,2,0,1]), # rhs = OIHW conv kernel tensor
                 (1, 1),  # window strides
                 'SAME') # padding mode
         return out
-    
+
     def init_params(rng, shape):
         return random.normal(rng, shape)
     
