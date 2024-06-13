@@ -31,6 +31,60 @@ def load_images(path: str, limit=None) -> List[np.ndarray]:
         image_count += 1
     return images
 
+import numpy as np # linear algebra
+import struct
+from array import array
+from os.path  import join
+
+class MnistDataloader(object):
+    def __init__(self, training_images_filepath,training_labels_filepath,
+                 test_images_filepath, test_labels_filepath):
+        self.training_images_filepath = training_images_filepath
+        self.training_labels_filepath = training_labels_filepath
+        self.test_images_filepath = test_images_filepath
+        self.test_labels_filepath = test_labels_filepath
+    
+    def read_images_labels(self, images_filepath, labels_filepath):        
+        labels = []
+        with open(labels_filepath, 'rb') as file:
+            magic, size = struct.unpack(">II", file.read(8))
+            if magic != 2049:
+                raise ValueError('Magic number mismatch, expected 2049, got {}'.format(magic))
+            labels = array("B", file.read())        
+        
+        with open(images_filepath, 'rb') as file:
+            magic, size, rows, cols = struct.unpack(">IIII", file.read(16))
+            if magic != 2051:
+                raise ValueError('Magic number mismatch, expected 2051, got {}'.format(magic))
+            image_data = array("B", file.read())        
+        images = []
+        for i in range(size):
+            images.append([0] * rows * cols)
+        for i in range(size):
+            img = np.array(image_data[i * rows * cols:(i + 1) * rows * cols])
+            img = img.reshape(28, 28)
+            images[i][:] = img            
+        
+        return images, labels
+            
+    def load_data(self):
+        x_train, y_train = self.read_images_labels(self.training_images_filepath, self.training_labels_filepath)
+        x_test, y_test = self.read_images_labels(self.test_images_filepath, self.test_labels_filepath)
+        return (x_train, y_train),(x_test, y_test)
+
+def load_mnist():
+    training_images_filepath = 'data/MNIST/train-images-idx3-ubyte/train-images-idx3-ubyte'
+    training_labels_filepath = 'data/MNIST/train-labels-idx1-ubyte/train-labels-idx1-ubyte'
+    test_images_filepath = 'data/MNIST/t10k-images-idx3-ubyte/t10k-images-idx3-ubyte'
+    test_labels_filepath = 'data/MNIST/t10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte'
+    
+    mnist_dataloader = MnistDataloader(training_images_filepath, training_labels_filepath,
+                                       test_images_filepath, test_labels_filepath)
+    (x_train, y_train), (x_test, y_test) = mnist_dataloader.load_data()
+    x = np.array(x_train + x_test)
+    y = np.array(y_train + y_test)
+    return x, y
+
 def save_images(images: List[np.ndarray], path: str) -> None:
     if not os.path.exists(path):
         os.makedirs(path)
@@ -46,6 +100,12 @@ def preprocess_images(images: List[np.ndarray]) -> np.ndarray:
 
 def postprocess_images(images: np.ndarray) -> List[np.ndarray]:
     images = images.reshape(images.shape[0], 256, 256, 3)
+    images = images * 255.0
+    images = images.astype(np.uint8)
+    return images
+
+def postprocess_images_mnist(images: np.ndarray) -> List[np.ndarray]:
+    images = images.reshape(images.shape[0], 28, 28)
     images = images * 255.0
     images = images.astype(np.uint8)
     return images
@@ -109,15 +169,10 @@ def main():
     dataset = tf.data.Dataset.from_tensor_slices((images, images))
     dataset = dataset.shuffle(buffer_size=1024).batch(32).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
+
     # define encoder and decoder using convolutional neural networks
     encoder = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=(256, 256, 3)),
-        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.MaxPooling2D((2, 2), padding='same'),
-        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.MaxPooling2D((2, 2), padding='same'),
-        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.MaxPooling2D((2, 2), padding='same'),
+        tf.keras.layers.InputLayer(input_shape=(28, 28)),
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(128, activation='relu'),
         tf.keras.layers.Dense(64, activation='relu'),
@@ -125,7 +180,7 @@ def main():
     ])
 
     decoder = tf.keras.Sequential([
-        tf.keras.layers.Input(shape=(32,)),
+        tf.keras.layers.InputLayer(input_shape=(32,)),
         tf.keras.layers.Dense(64, activation='relu'),
         tf.keras.layers.Dense(128, activation='relu'),
         tf.keras.layers.Dense(32*32*3, activation='relu'),
@@ -152,13 +207,14 @@ def main():
     latent = encoder(images)
     reconstructed = decoder(latent)
 
-    reconstructed = postprocess_images(reconstructed.numpy())
+    reconstructed = postprocess_images_mnist(reconstructed.numpy())
 
     current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
     save_images(reconstructed, f'reconstructed_{current_datetime}')
 
     save(encoder, decoder, f'models_{current_datetime}')
+
 
 if __name__ == '__main__':
     main()
