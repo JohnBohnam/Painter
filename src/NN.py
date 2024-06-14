@@ -8,7 +8,7 @@ from jax.scipy.special import logsumexp
 from typing import List, Tuple
 
 class Layer:
-    @jit
+    # @jit
     def forward(params, x):
         raise NotImplementedError()
     
@@ -16,7 +16,7 @@ class Layer:
         return jnp.array([])
 
 class LayerMatMul(Layer):
-    @jit
+    # @jit
     def forward(params, x):
       #  print('LayerMatMul:', x.shape, params)
         return jnp.dot(x, params)
@@ -27,7 +27,7 @@ class LayerMatMul(Layer):
         return W
     
 class LayerBias(Layer):
-    @jit
+    # @jit
     def forward(params, x):
         # print('LayerBias:', x.shape, params.shape)
        # print('x:', x)
@@ -37,13 +37,13 @@ class LayerBias(Layer):
         return random.normal(rng, shape) * jnp.sqrt(2.0/shape[0])
 
 class LReLU(Layer):
-    @jit
+    # @jit
     def forward(params, x):
         return jax.nn.leaky_relu(x)
     
     
 class LayerConv2D(Layer):
-    @jit
+    # @jit
     def forward(params, x):
         #print('LayerConv2D:', x.shape, params.shape)
        # print('x:', x)
@@ -51,6 +51,7 @@ class LayerConv2D(Layer):
                            jnp.transpose(params, [3, 2, 0, 1]),
                            (1, 1),
                            'SAME')
+        # out = x
         return out
 
     def init_params(rng, shape):
@@ -74,7 +75,7 @@ class LayerConv2DTranspose(Layer):
         return random.normal(rng, shape)* jnp.sqrt(2.0/shape[3])
     
 class LayerFlatten(Layer):
-    @jit
+    # @jit
     def forward(params, x):
         return jnp.reshape(x, (x.shape[0], -1))
     
@@ -82,7 +83,9 @@ class Layer2DReshape(Layer):
     def forward(params, x):
         # make x from vector to square matrix
         size = x.shape[1] // 16 # TODO: fix later
-        return jnp.reshape(x, (x.shape[0], 16, int(np.sqrt(size)), int(np.sqrt(size))))
+        res = jnp.reshape(x, (x.shape[0], 16, int(np.sqrt(size)), int(np.sqrt(size))))
+        res = jnp.transpose(res, [0, 2, 3, 1])
+        return res
     
     # for some reason gradient is not working if to initialize using init_params and pass the size as param
     
