@@ -1,4 +1,5 @@
 import os
+import jax
 import numpy as np
 from PIL import Image
 from typing import List
@@ -16,12 +17,10 @@ def load_images(path: str, limit=None) -> List[np.ndarray]:
         image_count += 1
     return images
 
-def save_images(images: List[np.ndarray], path: str) -> None:
-    if not os.path.exists(path):
-        os.makedirs(path)
+def save_images(images: List[jax.numpy.array], path: str):
     for i, image in enumerate(images):
-        image = Image.fromarray(image)
-        image.save(os.path.join(path, f'{i+1}.png'))
+        image = Image.fromarray(np.array(image).astype(np.uint8))
+        image.save(os.path.join(path, f'{i}.png'))
 
 def preprocess_images(images: List[np.ndarray]) -> np.ndarray:
     images = np.array(images)

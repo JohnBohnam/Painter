@@ -250,6 +250,7 @@ def autoencoder_test():
     num_pixels = 28 * 28
 
     train_images = jnp.reshape(train_images, (len(train_images), num_pixels))
+    test_images = jnp.reshape(test_images, (len(test_images), num_pixels))
     n_train = 1000
     train_images = train_images[:n_train]
     train_labels = train_labels[:n_train]
@@ -311,14 +312,17 @@ def autoencoder_test():
     model = AutoEncoder(encoder_layers, encoder_layer_shapes, decoder_layers, decoder_layer_shapes, MSE)
 
     train_images = train_images.reshape((len(train_images), 28, 28, 1))
+    test_images = test_images.reshape((len(test_images), 28, 28, 1))
     train_images = train_images.transpose((0, 3, 1, 2))
+    test_images = test_images.transpose((0, 3, 1, 2))
 
     # convert train_image elements to float32
     train_images = train_images.astype(jnp.float32)
+    test_images = test_images.astype(jnp.float32)
     
     print('Shape: ', train_images.shape)
 
-    model.train(train_images, train_images, epochs=100, learning_rate=0.01)
+    model.train(train_images, train_images, epochs=5, learning_rate=0.01)
 
     test_images = model(test_images)
 
