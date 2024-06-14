@@ -26,6 +26,7 @@ class NeuralNet:
             for i in range(len(self.layers)):
                 # print(f'Layer {i} - {self.layers[i]}: {params[i].shape}, {x.shape}')
                 x = self.layers[i].forward(params[i], x)
+                # print(f'After Layer {i} - {self.layers[i]}: {x.shape}')
             return x
         
         self.forward = forward
@@ -297,13 +298,13 @@ def autoencoder_test():
     decoder_layer_shapes = [
         (16, 28 * 28 * 16),
         (16),
-        (16, 16, 16, 8),
+        (4, 4, 16, 8),
         (),
-        (16, 16, 8, 4), 
+        (4, 4, 8, 4), 
         (),
-        (16, 16, 4, 1),
+        (4, 4, 4, 4),
         (),
-        (16 * 28 * 28, 28 * 28),
+        (28 * 28 * 4, 28 * 28),
         (28 * 28, ),
         (1),
     ]
