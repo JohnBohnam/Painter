@@ -322,7 +322,6 @@ def autoencoder_test():
     ]
 
     decoder_layers = [
-<<<<<<< HEAD
        NN.LayerMatMul,
        NN.LayerBias,
        NN.LReLU,
@@ -347,33 +346,6 @@ def autoencoder_test():
         (3, 3, 4, 1),
         (),
         
-=======
-        NN.LayerMatMul,
-        NN.Layer2DReshape,
-        NN.LayerConv2DTranspose,
-        NN.LReLU,
-        NN.LayerConv2DTranspose,
-        NN.LReLU,
-        NN.LayerConv2DTranspose,
-        NN.LayerFlatten,
-        NN.LayerMatMul,
-        NN.LayerBias,
-        NN.Layer2DReshape1,
-    ]
-
-    decoder_layer_shapes = [
-        (16, 28 * 28 * 16),
-        (16),
-        (4, 4, 16, 8),
-        (),
-        (4, 4, 8, 4), 
-        (),
-        (4, 4, 4, 4),
-        (),
-        (28 * 28 * 4, 28 * 28),
-        (28 * 28, ),
-        (1),
->>>>>>> 1ab690ca5d70b6aeb826c56b344cfe01fea5a3dd
     ]
 
 
