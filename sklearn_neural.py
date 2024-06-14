@@ -162,38 +162,36 @@ def load(encoder, decoder, path: str) -> None:
     decoder.load(os.path.join(path, 'decoder.keras'))
 
 def main():
-    images = load_images('data', 100)
+    images, _ = load_mnist()
     images = preprocess_images(images)
-    images = images.reshape(images.shape[0], 256, 256, 3)
+    images = images.reshape(images.shape[0], 28, 28)
+    print(images.shape)
     
     dataset = tf.data.Dataset.from_tensor_slices((images, images))
     dataset = dataset.shuffle(buffer_size=1024).batch(32).prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
+    print(dataset)
+
 
     # define encoder and decoder using convolutional neural networks
     encoder = tf.keras.Sequential([
-        tf.keras.layers.InputLayer(input_shape=(28, 28)),
+        tf.keras.layers.InputLayer(input_shape=(28, 28, 1)),
+        tf.keras.layers.Conv2D(8, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(128, activation='relu'),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(32, activation='relu')
+        tf.keras.layers.Dense(32, activation='relu'),
+        tf.keras.layers.Dense(16, activation='relu')
     ])
 
     decoder = tf.keras.Sequential([
-        tf.keras.layers.InputLayer(input_shape=(32,)),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(128, activation='relu'),
-        tf.keras.layers.Dense(32*32*3, activation='relu'),
-        tf.keras.layers.Reshape((32, 32, 3)),
-        tf.keras.layers.Conv2DTranspose(32, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.UpSampling2D((2, 2)),
-        tf.keras.layers.Conv2DTranspose(32, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.UpSampling2D((2, 2)),
-        tf.keras.layers.Conv2DTranspose(32, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.UpSampling2D((2, 2)),
-        tf.keras.layers.Conv2DTranspose(3, (3, 3), activation='relu', padding='same'),
-        tf.keras.layers.Reshape((256, 256, 3))
+        tf.keras.layers.InputLayer(input_shape=(16,)),
+        tf.keras.layers.Dense(28*28*16, activation='sigmoid'),
+        tf.keras.layers.Reshape((28, 28, 16)),
+        tf.keras.layers.Conv2DTranspose(8, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2DTranspose(4, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Conv2DTranspose(1, (3, 3), activation='sigmoid', padding='same')
     ])
+
     optimizer = tf.keras.optimizers.Adam()  
 
     # use optimizer to compile the model
@@ -201,7 +199,7 @@ def main():
     decoder.compile(optimizer=optimizer)
 
     # train the model
-    train2(encoder, decoder, dataset, epochs=100, lr=0.01)
+    train2(encoder, decoder, dataset, epochs=50, lr=0.01)
 
     # test the model
     latent = encoder(images)

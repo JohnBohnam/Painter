@@ -17,17 +17,17 @@ class NeuralNet:
         self.layer_shapes = layer_shapes
         self.loss_f = loss_f
         self.params = []
-        self.rng = random.PRNGKey(100)
+        self.rng = random.PRNGKey(25)
         
         for i in range(len(layer_shapes)):
             self.params.append(layers[i].init_params(self.rng, layer_shapes[i]))
-            
+
         def forward(params, x):
             for i in range(len(self.layers)):
                 # print(f'Layer {i} - {self.layers[i]}: {params[i].shape}, {x.shape}')
                 x = self.layers[i].forward(params[i], x)
             return x
-        
+
         self.forward = forward
         
         def loss(params, x, y):
@@ -47,9 +47,9 @@ class NeuralNet:
                 continue
             
             g_max = jnp.max(jnp.abs(grads[i]))
-            if g_max > 1:
-                grads[i] = grads[i] / g_max
             self.params[i] = self.params[i] - learning_rate * grads[i]
+            # ensure that the weights are not negative
+
 
     def update(self, x, y, learning_rate):
         grads = grad(self.loss)(self.params, x, y)
@@ -160,6 +160,7 @@ class AutoEncoder:
         self.params = (self.encoder.params, self.decoder.params)
 
         def forward(params, x):
+            # print('Forward')
             encoder_params, decoder_params = params
             encoded = self.encoder.forward(encoder_params, x)
             decoded = self.decoder.forward(decoder_params, encoded)
@@ -192,12 +193,31 @@ class AutoEncoder:
         self.encoder.updateWithGrad(enc_grads, learning_rate)
         self.decoder.updateWithGrad(dec_grads, learning_rate)
         self.params = (self.encoder.params, self.decoder.params)
+        #print(self.params)
 
     def train(self, X, y, epochs=100, learning_rate=0.01):
+        # implement mini-batch training
+        batch_size = 512
         for epoch in range(epochs):
-            self.update(X, y, learning_rate)
-            cur_loss = self.loss(self.params, X, y)
-            print(f'Epoch: {epoch}, Loss: {cur_loss}')
+            for i in range(0, len(X), batch_size):
+                x_batch = X[i:i+batch_size]
+                y_batch = y[i:i+batch_size]
+                self.update(x_batch, y_batch, learning_rate)
+            loss = self.loss(self.params, X, y)
+            print(f'Epoch: {epoch}, Loss: {loss}')
+
+    def save(self, path):
+        # save model into the file
+        import pickle
+        with open(path, 'wb') as f:
+            pickle.dump((self.params,   self.encoder.layers, self.encoder.forward, self.encoder.loss, \
+                                        self.decoder.layers, self.decoder.forward, self.decoder.loss), f)
+
+    def load(self, path):
+        import pickle
+        with open(path, 'rb') as f:
+            self.params, self.encoder.layers, self.encoder.forward, self.encoder.loss, \
+             self.decoder.layers, self.decoder.forward, self.decoder.loss = pickle.load(f)
 
 
 
@@ -246,12 +266,24 @@ def conv_test():
 
 def autoencoder_test():
     # print current working directory
-    train_images, train_labels, test_images, test_labels = datatransform.readMNIST('./data/MNIST/')
+    training_images_filepath = '../data/MNIST/train-images-idx3-ubyte/train-images-idx3-ubyte'
+    training_labels_filepath = '../data/MNIST/train-labels-idx1-ubyte/train-labels-idx1-ubyte'
+    test_images_filepath = '../data/MNIST/t10k-images-idx3-ubyte/t10k-images-idx3-ubyte'
+    test_labels_filepath = '../data/MNIST/t10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte'
+    
+    mnist_dataloader = datatransform.MnistDataloader(training_images_filepath, training_labels_filepath,
+                                       test_images_filepath, test_labels_filepath)
+    (train_images, train_labels), (test_images, test_labels) = mnist_dataloader.load_data()
+    train_images = np.array(train_images)
+    test_images = np.array(test_images)
+    train_labels = np.array(train_labels)
+    test_labels = np.array(test_labels)
+
     num_pixels = 28 * 28
 
     train_images = jnp.reshape(train_images, (len(train_images), num_pixels))
     test_images = jnp.reshape(test_images, (len(test_images), num_pixels))
-    n_train = 1000
+    n_train = 10000
     train_images = train_images[:n_train]
     train_labels = train_labels[:n_train]
     print(train_images.shape)
@@ -268,44 +300,51 @@ def autoencoder_test():
         NN.LayerFlatten,
         NN.LayerMatMul,
         NN.LayerBias,
+        NN.LReLU,
+        NN.LayerMatMul,
+        NN.LayerBias,
+        NN.LReLU,
     ]
     
     encoder_layer_shapes = [
-        (14, 14, 1, 8),
+        (3,3,1,8),
         (),
-        (3, 3, 8, 16),
+        (3,3,8,16),
         (),
         (),
-        (28 * 28 * 16, 16),
+        (28*28*16, 32),
+        (32,),
+        (),
+        (32, 16),
         (16,),
+        (),
     ]
 
     decoder_layers = [
-        NN.LayerMatMul,
-        NN.Layer2DReshape,
-        # NN.LayerConv2DTranspose,
-        # NN.LReLU,
-        # NN.LayerConv2DTranspose,
-        # NN.LReLU,
-        # NN.LayerConv2DTranspose,
-        NN.LayerFlatten,
-        NN.LayerMatMul,
-        NN.LayerBias,
-        NN.Layer2DReshape1,
+       NN.LayerMatMul,
+       NN.LayerBias,
+       NN.LReLU,
+       NN.Layer2DReshape,
+       NN.LayerConv2DTranspose,
+       NN.LReLU,
+       NN.LayerConv2DTranspose,
+       NN.LReLU,
+       NN.LayerConv2DTranspose,
+       NN.LayerSigmod,
     ]
 
     decoder_layer_shapes = [
-        (16, 28 * 28 * 16),
-        (16),
-        # (14, 14, 16, 8),
-        # (),
-        # (3, 3, 8, 4),
-        # (),
-        # (3, 3, 4, 1),
+        (16, 16*28*28),
+        (16*28*28,),
         (),
-        (16 * 28 * 28, 28 * 28),
-        (28 * 28, ),
-        (1),
+        (),
+        (3, 3, 16, 8),
+        (),
+        (3, 3, 8, 4),
+        (),
+        (3, 3, 4, 1),
+        (),
+        
     ]
 
 
@@ -319,18 +358,25 @@ def autoencoder_test():
     # convert train_image elements to float32
     train_images = train_images.astype(jnp.float32)
     test_images = test_images.astype(jnp.float32)
+    train_images = train_images / 255
+    test_images = test_images / 255
     
     print('Shape: ', train_images.shape)
 
-    model.train(train_images, train_images, epochs=5, learning_rate=0.01)
+    model.train(train_images, train_images, epochs=5, learning_rate=0.1)
+
+    # TODO
+    # Save is not working properly. If you could fix it I would be grateful.
+    # model.save('../models/autoencoder.model')
 
     test_images = model(test_images)
 
+    test_images = test_images * 255
     test_images = jnp.reshape(test_images, (len(test_images), 28, 28))
 
-    datatransform.save_images(test_images, 'output')
+    datatransform.save_images(test_images, '../output')
 
-        
+
 
 if __name__ == "__main__":
     # jax.config.update("jax_traceback_filtering", "off")
