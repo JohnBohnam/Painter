@@ -4,6 +4,7 @@ import jax
 from jax import grad, jit, random
 import datatransform
 from jax.scipy.special import logsumexp
+import pickle
 
 import NN
 
@@ -13,6 +14,20 @@ def one_hot(x, k, dtype=jnp.float32):
 
 
 class NeuralNet:
+    
+    def _init_locals(self):
+        def forward(params, x):
+            for i in range(len(self.layers)):
+                x = self.layers[i].forward(params[i], x)
+            return x
+    
+        def loss(params, x, y):
+            y_hat = forward(params, x)
+            return self.loss_f(y_hat, y)
+        
+        self.forward = forward
+        self.loss = loss
+    
     def __init__(self, layers, layer_shapes, loss_f):
         self.layers = layers
         self.layer_shapes = layer_shapes
@@ -23,19 +38,21 @@ class NeuralNet:
         for i in range(len(layer_shapes)):
             self.params.append(layers[i].init_params(self.rng, layer_shapes[i]))
 
-        def forward(params, x):
-            for i in range(len(self.layers)):
-                # print(f'Layer {i} - {self.layers[i]}: {params[i].shape}, {x.shape}')
-                x = self.layers[i].forward(params[i], x)
-            return x
+        # def forward(params, x):
+        #     for i in range(len(self.layers)):
+        #         # print(f'Layer {i} - {self.layers[i]}: {params[i].shape}, {x.shape}')
+        #         x = self.layers[i].forward(params[i], x)
+        #     return x
 
-        self.forward = forward
+        # self.forward = forward
 
-        def loss(params, x, y):
-            y_hat = forward(params, x)
-            return self.loss_f(y_hat, y)
+        # def loss(params, x, y):
+        #     y_hat = forward(params, x)
+        #     return self.loss_f(y_hat, y)
 
-        self.loss = loss
+        # self.loss = loss
+        
+        self._init_locals()
 
         print(f"NN initialized with {len(self.params)} layers")
 
@@ -60,6 +77,19 @@ class NeuralNet:
             self.update(X, y, learning_rate)
             loss = self.loss(self.params, X, y)
             print(f'Epoch: {_}, Loss: {loss}')
+            
+    def save(self, path):
+        # save model into the file
+        with open(path, 'wb') as f:
+            pickle.dump((self.params, self.layers, self.layer_shapes, self.loss_f), f)
+            
+    def load(self, path):
+        with open(path, 'rb') as f:
+            self.params, self.layers, self.layer_shapes, self.loss_f = pickle.load(f)
+            self._init_locals()
+        
+        
+        
 
 
 def MSE(y_hat, y):
@@ -153,41 +183,52 @@ def simple():
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 class AutoEncoder:
+    def _init_locals(self):
+        encoder_params = self.encoder.params
+        decoder_params = self.decoder.params
+        
+        encoder_layers = self.encoder.layers
+        decoder_layers = self.decoder.layers
+        
+        encoder_params, decoder_params = self.params
+        
+        self.encoder.params = encoder_params
+        self.decoder.params = decoder_params
+        
+        self.encoder.layers = encoder_layers
+        self.decoder.layers = decoder_layers
+        
+        self.encoder._init_locals()
+        self.decoder._init_locals()
+        
+        
+        def forward(params, x):
+            encoder_params, decoder_params = params
+            encoded = self.encoder.forward(encoder_params, x)
+            decoded = self.decoder.forward(decoder_params, encoded)
+            return decoded
+
+        def loss(params, x, y):
+            y_hat = forward(params, x)
+            return self.loss_f(y_hat, y)
+
+        self.forward = forward
+        self.loss = loss
+    
     def __init__(self, encoder_layers, encoder_layer_shapes, decoder_layers, decoder_layer_shapes, loss_f):
         self.encoder = NeuralNet(encoder_layers, encoder_layer_shapes, loss_f)
         self.decoder = NeuralNet(decoder_layers, decoder_layer_shapes, loss_f)
         self.loss_f = loss_f
         self.params = (self.encoder.params, self.decoder.params)
 
-        def forward(params, x):
-            # print('Forward')
-            encoder_params, decoder_params = params
-            encoded = self.encoder.forward(encoder_params, x)
-            decoded = self.decoder.forward(decoder_params, encoded)
-            return decoded
-
-        self.forward = forward
-
-        def loss(params, x, y):
-            # enc_params_len = len(self.encoder.params)
-            # self.encoder.params = params[:enc_params_len]
-            # self.decoder.params = params[enc_params_len:]
-
-            y_hat = self.forward(params, x)
-            return self.loss_f(y_hat, y)
-
-        self.loss = loss
+        self._init_locals()
+        print(f"AutoEncoder initialized with {len(self.params[0])} encoder layers and {len(self.params[1])} decoder layers")
 
     def __call__(self, x):
         return self.forward(self.params, x)
 
     def update(self, x, y, learning_rate):
-        # combined_params = (self.encoder.params + self.decoder.params)
         grads = grad(self.loss)(self.params, x, y)
-
-        # enc_params_len = len(self.encoder.params)
-        # enc_grads = grads[:enc_params_len]
-        # dec_grads = grads[enc_params_len:]
         enc_grads, dec_grads = grads
 
         self.encoder.updateWithGrad(enc_grads, learning_rate)
@@ -210,14 +251,14 @@ class AutoEncoder:
         # save model into the file
         import pickle
         with open(path, 'wb') as f:
-            pickle.dump((self.params, self.encoder.layers, self.encoder.forward, self.encoder.loss, \
-                         self.decoder.layers, self.decoder.forward, self.decoder.loss), f)
+            pickle.dump((self.params, self.encoder.layers, self.decoder.layers, self.loss_f), f)
+            
 
     def load(self, path):
         import pickle
         with open(path, 'rb') as f:
-            self.params, self.encoder.layers, self.encoder.forward, self.encoder.loss, \
-                self.decoder.layers, self.decoder.forward, self.decoder.loss = pickle.load(f)
+            self.params, self.encoder.layers, self.decoder.layers, self.loss_f = pickle.load(f)
+            self._init_locals()
 
 
 # not done yet
@@ -360,12 +401,18 @@ def autoencoder_test():
     test_images = test_images / 255
 
     print('Shape: ', train_images.shape)
+    
+    # out_before = model(train_images)
+    # model.save('../models/autoencoder.model')
+    # model2 = AutoEncoder(encoder_layers, encoder_layer_shapes, decoder_layers, decoder_layer_shapes, MSE)
+    # model2.load('../models/autoencoder.model')
+    # out_after = model2(train_images)
+    
+    # assert jnp.allclose(out_before, out_after)
+    # print('Model loaded successfully')
 
     model.train(train_images, train_images, epochs=5, learning_rate=0.1)
 
-    # TODO
-    # Save is not working properly. If you could fix it I would be grateful.
-    # model.save('../models/autoencoder.model')
 
     test_images = model(test_images)
 
