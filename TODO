@@ -1,2 +1,6 @@
-1. NN (autograd)
-2. CNN 
+1. change loss function
+2. save model
+3. test on different datasets
+4. refactoring
+5. VAE
+6. Raport
