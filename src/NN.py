@@ -88,8 +88,8 @@ class LayerFlatten(Layer):
 class Layer2DReshape(Layer):
     def forward(params, x):
         # make x from vector to square matrix
-        size = x.shape[1] // 16  # TODO: fix later
-        return jnp.reshape(x, (x.shape[0], 16, int(np.sqrt(size)), int(np.sqrt(size))))
+        size = x.shape[1] // 64  # TODO: fix later
+        return jnp.reshape(x, (x.shape[0], 64, int(np.sqrt(size)), int(np.sqrt(size))))
 
     # for some reason gradient is not working if to initialize using init_params and pass the size as param
 

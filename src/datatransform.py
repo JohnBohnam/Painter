@@ -18,9 +18,12 @@ def load_images(path: str, limit=None) -> List[np.ndarray]:
     return images
 
 def save_images(images: List[jax.numpy.array], path: str):
+    if not os.path.exists(path):
+        os.makedirs(path)
+    
     for i, image in enumerate(images):
         image = np.array(image)
-        print('image array:',image)
+        # print('image array:',image)
         image = np.round(image)
         image = Image.fromarray(image.astype(np.uint8))
         image.save(os.path.join(path, f'{i}.png'))
