@@ -95,7 +95,6 @@ class NeuralNet:
 def MSE(y_hat, y):
     return jnp.mean((y_hat - y) ** 2)
 
-
 def log_entropy(y_hat, y):
     return -jnp.mean(y_hat * y)
 
@@ -411,7 +410,9 @@ def autoencoder_test():
     # assert jnp.allclose(out_before, out_after)
     # print('Model loaded successfully')
 
-    model.train(train_images, train_images, epochs=5, learning_rate=0.1)
+    model.train(train_images, train_images, epochs=50, learning_rate=0.1)
+
+    model.save('../models/autoencoder.model')
 
 
     test_images = model(test_images)
@@ -421,11 +422,175 @@ def autoencoder_test():
 
     datatransform.save_images(test_images, '../output')
 
+class VariationalAutoencoder:
+    def _init_locals(self):
+        encoder_params = self.encoder.params
+        decoder_params = self.decoder.params
+        self.encoder.params = encoder_params
+        self.decoder.params = decoder_params
+        self.encoder._init_locals()
+        self.decoder._init_locals()
+
+        def forward(params, x):
+            encoder_params, decoder_params = params
+            encoded = self.encoder.forward(encoder_params, x)
+            mu, log_var = jnp.split(encoded, 2, axis=1)
+            std = jnp.exp(0.5 * log_var)
+            eps = random.normal(self.rng, mu.shape)
+            z = mu + eps * std
+            decoded = self.decoder.forward(decoder_params, z)
+            return decoded, mu, log_var
+
+        def loss(params, x, y):
+            y_hat, mu, log_var = forward(params, x)
+            kl_div = -0.5 * jnp.sum(1 + log_var - mu ** 2 - jnp.exp(log_var), axis=1)
+            return self.loss_f(y_hat, y) + jnp.mean(kl_div)
+
+        self.forward = forward
+        self.loss = loss
+
+    def __init__(self, encoder_layers, encoder_layer_shapes, decoder_layers, decoder_layer_shapes, loss_f):
+        self.encoder = NeuralNet(encoder_layers, encoder_layer_shapes, loss_f)
+        self.decoder = NeuralNet(decoder_layers, decoder_layer_shapes, loss_f)
+        self.loss_f = loss_f
+        self.params = (self.encoder.params, self.decoder.params)
+        self.rng = random.PRNGKey(0)
+        self._init_locals()
+        print(f"VariationalAutoencoder initialized with {len(self.params[0])} encoder layers and {len(self.params[1])} decoder layers")
+
+    def __call__(self, x):
+        return self.forward(self.params, x)
+
+    def update(self, x, y, learning_rate):
+        grads = grad(self.loss)(self.params, x, y)
+        enc_grads, dec_grads = grads
+
+        self.encoder.updateWithGrad(enc_grads, learning_rate)
+        self.decoder.updateWithGrad(dec_grads, learning_rate)
+        self.params = (self.encoder.params, self.decoder.params)
+
+    def train(self, X, y, epochs=100, learning_rate=0.01):
+        # implement mini-batch training
+        batch_size = 1024
+        for epoch in range(epochs):
+            for i in range(0, len(X), batch_size):
+                x_batch = X[i:i + batch_size]
+                y_batch = y[i:i + batch_size]
+                self.update(x_batch, y_batch, learning_rate)
+            loss = self.loss(self.params, X, y)
+            print(f'Epoch: {epoch}, Loss: {loss}')
+
+def vae_test():
+    training_images_filepath = '../data/MNIST/train-images-idx3-ubyte/train-images-idx3-ubyte'
+    training_labels_filepath = '../data/MNIST/train-labels-idx1-ubyte/train-labels-idx1-ubyte'
+    test_images_filepath = '../data/MNIST/t10k-images-idx3-ubyte/t10k-images-idx3-ubyte'
+    test_labels_filepath = '../data/MNIST/t10k-labels-idx1-ubyte/t10k-labels-idx1-ubyte'
+
+    mnist_dataloader = datatransform.MnistDataloader(training_images_filepath, training_labels_filepath,
+                                                     test_images_filepath, test_labels_filepath)
+    (train_images, train_labels), (test_images, test_labels) = mnist_dataloader.load_data()
+    train_images = np.array(train_images)
+    test_images = np.array(test_images)
+    train_labels = np.array(train_labels)
+    test_labels = np.array(test_labels)
+
+    num_pixels = 28 * 28
+
+    train_images = jnp.reshape(train_images, (len(train_images), num_pixels))
+    test_images = jnp.reshape(test_images, (len(test_images), num_pixels))
+    n_train = 60000
+    train_images = train_images[:n_train]
+    train_labels = train_labels[:n_train]
+
+    num_labels = 10
+
+    train_labels = one_hot(train_labels, num_labels)
+
+    encoder_layers = [
+        NN.LayerConv2D,
+        NN.LReLU,
+        NN.LayerConv2D,
+        NN.LReLU,
+        NN.LayerFlatten,
+        NN.LayerMatMul,
+        NN.LayerBias,
+        NN.LReLU,
+        NN.LayerMatMul,
+        NN.LayerBias,
+        NN.LReLU,
+    ]
+
+    encoder_layer_shapes = [
+        (3, 3, 1, 8),
+        (),
+        (3, 3, 8, 16),
+        (),
+        (),
+        (28 * 28 * 16, 64),
+        (64,),
+        (),
+        (64, 32),
+        (32,),
+        (),
+    ]
+
+    decoder_layers = [
+        NN.LayerMatMul,
+        NN.LayerBias,
+        NN.LReLU,
+        NN.Layer2DReshape,
+        NN.LayerConv2DTranspose,
+        NN.LReLU,
+        NN.LayerConv2DTranspose,
+        NN.LReLU,
+        NN.LayerConv2DTranspose,
+        NN.LayerSigmod,
+    ]
+
+    decoder_layer_shapes = [
+        (16, 16 * 28 * 28),
+        (16 * 28 * 28,),
+        (),
+        (),
+        (3, 3, 16, 8),
+        (),
+        (3, 3, 8, 4),
+        (),
+        (3, 3, 4, 1),
+        (),
+    ]
+
+    model = VariationalAutoencoder(encoder_layers, encoder_layer_shapes, decoder_layers, decoder_layer_shapes, MSE)
+
+    train_images = train_images.reshape((len(train_images), 28, 28, 1))
+    test_images = test_images.reshape((len(test_images), 28, 28, 1))
+    train_images = train_images.transpose((0, 3, 1, 2))
+    test_images = test_images.transpose((0, 3, 1, 2))
+
+    # convert train_image elements to float32
+    train_images = train_images.astype(jnp.float32)
+    test_images = test_images.astype(jnp.float32)
+    train_images = train_images / 255
+    test_images = test_images / 255
+
+    print('Shape: ', train_images.shape)
+
+    model.train(train_images, train_images, epochs=50, learning_rate=0.1)
+
+    model.save('../models/vae.model')
+
+    test_images = model(test_images)
+
+    test_images = test_images * 255
+
+    test_images = jnp.reshape(test_images, (len(test_images), 28, 28))
+
+    datatransform.save_images(test_images, '../output/vae')
 
 if __name__ == "__main__":
     # jax.config.update("jax_traceback_filtering", "off")
     # main()
     # simple()
     # conv_test()
-    autoencoder_test()
-
+    # autoencoder_test()
+    vae_test()
