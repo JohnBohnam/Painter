@@ -5,6 +5,7 @@ from jax import grad
 import pickle
 import numpy as np
 import NN
+from functions import MSE
 
 class VariationalAutoencoder:
     def _init_locals(self):
@@ -34,8 +35,8 @@ class VariationalAutoencoder:
 
         def loss(params, x, y):
             y_hat, mu, log_var = forward(params, x)
-            kl_div = -0.5 * jnp.sum(1 + log_var - jnp.square(mu) - jnp.exp(log_var), axis=-1)
-            total_loss = jnp.mean(self.loss_f(y_hat, y) + kl_div * 0.002)
+            kl_div = -0.5 * jnp.sum(1 + log_var - jnp.square(mu) - jnp.exp(log_var), axis=1)
+            total_loss = self.loss_f(y_hat, y) + jnp.mean(kl_div) * 0.02
             return total_loss
 
         self.forward = forward
@@ -48,13 +49,13 @@ class VariationalAutoencoder:
             NN.LayerMatMul,
             NN.LReLU,
         ], [
-            (128, 64), ()
+            (256, 128), ()
         ], loss_f)
         self.var_encoder = NeuralNet([
             NN.LayerMatMul,
             NN.LReLU,
         ], [
-            (128, 64), ()
+            (256, 128), ()
         ], loss_f)
         self.loss_f = loss_f
         self.params = (self.encoder.params, self.decoder.params, self.mean_encoder.params, self.var_encoder.params)
@@ -75,15 +76,16 @@ class VariationalAutoencoder:
         self.var_encoder.updateWithGrad(var_grads, learning_rate)
         self.params = (self.encoder.params, self.decoder.params, self.mean_encoder.params, self.var_encoder.params)
 
-    def train(self, X, y, epochs=100, learning_rate=0.01):
+    def train(self, X, y, val_x, val_y, epochs=100, learning_rate=0.01):
         # implement mini-batch training
         batch_size = 512
         for epoch in range(epochs):
+
             for i in range(0, len(X), batch_size):
                 x_batch = X[i:i + batch_size]
                 y_batch = y[i:i + batch_size]
                 self.update(x_batch, y_batch, learning_rate)
-            loss = self.loss(self.params, X, y)
+            loss = self.loss(self.params, val_x, val_y)
             print(f'Epoch: {epoch}, Loss: {loss}')
 
     def save(self, path):

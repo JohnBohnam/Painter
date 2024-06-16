@@ -29,6 +29,24 @@ class LayerMatMul(Layer):
         return W
 
 
+class LayerMatMulDropout(Layer):
+    @jit
+    def forward(params, x):
+        #  print('LayerMatMul:', x.shape, params)
+        return jnp.dot(x, params)
+    
+    def init_params(rng, shape):
+        input_shape, output_shape = shape
+        W = random.normal(rng, (input_shape, output_shape)) * jnp.sqrt(2.0 / input_shape)
+        # choose 20% of the rows to be zero
+        mask = random.bernoulli(rng, 0.8, (output_shape,))
+        for i in range(output_shape):
+            if mask[i] == 0:
+                W = W.at[:, i].set(0)
+        return W
+
+
+
 class LayerBias(Layer):
     @jit
     def forward(params, x):
@@ -88,8 +106,8 @@ class LayerFlatten(Layer):
 class Layer2DReshape(Layer):
     def forward(params, x):
         # make x from vector to square matrix
-        size = x.shape[1] // 64  # TODO: fix later
-        return jnp.reshape(x, (x.shape[0], 64, int(np.sqrt(size)), int(np.sqrt(size))))
+        size = x.shape[1] // 3  # TODO: fix later
+        return jnp.reshape(x, (x.shape[0], 3, int(np.sqrt(size)), int(np.sqrt(size))))
 
     # for some reason gradient is not working if to initialize using init_params and pass the size as param
 
