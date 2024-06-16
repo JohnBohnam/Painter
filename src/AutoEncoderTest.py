@@ -146,7 +146,7 @@ def autoencoder_test():
 
     datatransform.save_images(test_images, '../output')
 
-   
+
 if __name__ == '__main__':
     autoencoder_test()
 
