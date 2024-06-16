@@ -33,9 +33,17 @@ def autoencoder_test():
 
     train_images = jnp.reshape(train_images, (len(train_images), num_pixels))
     test_images = jnp.reshape(test_images, (len(test_images), num_pixels))
-    n_train = 10000
-    train_images = train_images[:n_train]
-    train_labels = train_labels[:n_train]
+    n_train = 60000
+
+    val_images = train_images[int(n_train * 0.6):int(n_train * 0.8)]
+    val_labels = train_labels[int(n_train * 0.6):int(n_train * 0.8)]
+
+    test_images = train_images[int(n_train * 0.8):]
+    test_labels = train_labels[int(n_train * 0.8):]
+
+    train_images = train_images[:int(n_train * 0.6)]
+    train_labels = train_labels[:int(n_train * 0.6)]
+
     print(train_images.shape)
 
     num_labels = 10
@@ -101,14 +109,19 @@ def autoencoder_test():
 
     train_images = train_images.reshape((len(train_images), 28, 28, 1))
     test_images = test_images.reshape((len(test_images), 28, 28, 1))
+    val_images = val_images.reshape((len(val_images), 28, 28, 1))
     train_images = train_images.transpose((0, 3, 1, 2))
     test_images = test_images.transpose((0, 3, 1, 2))
+    val_images = val_images.transpose((0, 3, 1, 2))
 
     # convert train_image elements to float32
     train_images = train_images.astype(jnp.float32)
     test_images = test_images.astype(jnp.float32)
+    val_images = val_images.astype(jnp.float32)
+    
     train_images = train_images / 255
     test_images = test_images / 255
+    val_images = val_images / 255
 
     print('Shape: ', train_images.shape)
     
@@ -121,7 +134,7 @@ def autoencoder_test():
     # assert jnp.allclose(out_before, out_after)
     # print('Model loaded successfully')
 
-    model.train(train_images, train_images, epochs=50, learning_rate=0.1)
+    model.train(train_images, train_images, val_images, val_images, epochs=20, learning_rate=0.1)
 
     model.save('../models/autoencoder.model')
 
@@ -132,3 +145,12 @@ def autoencoder_test():
     test_images = jnp.reshape(test_images, (len(test_images), 28, 28))
 
     datatransform.save_images(test_images, '../output')
+
+   
+if __name__ == '__main__':
+    autoencoder_test()
+
+
+
+
+

@@ -55,7 +55,7 @@ class AutoEncoder:
         self.params = (self.encoder.params, self.decoder.params)
         # print(self.params)
 
-    def train(self, X, y, epochs=100, learning_rate=0.01):
+    def train(self, X, y, val_x, val_y, epochs=100, learning_rate=0.01):
         # implement mini-batch training
         batch_size = 512
         for epoch in range(epochs):
@@ -63,7 +63,7 @@ class AutoEncoder:
                 x_batch = X[i:i + batch_size]
                 y_batch = y[i:i + batch_size]
                 self.update(x_batch, y_batch, learning_rate)
-            loss = self.loss(self.params, X, y)
+            loss = self.loss(self.params, val_x, val_y)
             print(f'Epoch: {epoch}, Loss: {loss}')
 
     def save(self, path):
